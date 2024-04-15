@@ -1,4 +1,6 @@
 import { extend } from "../shared";
+let activeEffect;
+let shouldTrack;
 
 class ReactiveEffect {
   private fn;
@@ -11,8 +13,17 @@ class ReactiveEffect {
   }
 
   run() {
+    if (!this.active) {
+      return this.fn();
+    }
+    shouldTrack = true;
     activeEffect = this;
-    return this.fn();
+    const result = this.fn();
+    // 重置
+    shouldTrack = false;
+    activeEffect = undefined;
+
+    return result;
   }
 
   stop() {
@@ -33,6 +44,7 @@ function cleanupEffect(effect) {
 
 const targetMap = new Map();
 export function track(target, key) {
+  if (!isTracking()) return;
   // target -> key -> dep
   let depsMap = targetMap.get(target);
   if (!depsMap) {
@@ -46,9 +58,12 @@ export function track(target, key) {
     depsMap.set(key, dep);
   }
   dep.add(activeEffect);
-  if (!activeEffect) return;
   // 反向收集 deps
   activeEffect.deps.push(dep);
+}
+
+function isTracking() {
+  return shouldTrack && activeEffect !== undefined;
 }
 
 export function trigger(target, key) {
@@ -64,7 +79,7 @@ export function trigger(target, key) {
   }
 }
 
-let activeEffect;
+
 export function effect(fn, options: any = {}) {
   const _effect = new ReactiveEffect(fn, options.scheduler);
   // _effect.onStop = options.onStop;
